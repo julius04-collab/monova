@@ -159,12 +159,20 @@ p{margin:0}
 #flow text{font-family:var(--body); font-size:13px; fill:var(--ink)}
 #flow text.amt{font-family:var(--mono); font-size:12px; fill:var(--muted)}
 #flow .band{opacity:.22; transition:opacity .25s}
-#flow g.link:hover .band{opacity:.5}
-.flow-legend{display:none; grid-template-columns:1fr 1fr; gap:8px 16px; margin-top:14px; font-size:.84rem}
-.flow-legend div{display:flex; gap:8px; align-items:center}
-.flow-legend i{width:10px; height:10px; border-radius:3px; flex:none}
-.flow-legend .num{color:var(--muted); margin-left:auto; font-size:.8rem}
-@media (max-width:640px){ #flow .lab{display:none} .flow-legend{display:grid} }
+#flow g.link:hover .band, #flow g.link.hi .band{opacity:.6}
+#flow g.link{transition:opacity .25s}
+#flow g.link.dim{opacity:.15}
+.flow-legend{display:none; margin-top:16px; border-top:1px solid var(--line)}
+.flow-legend button{all:unset; box-sizing:border-box; width:100%; display:grid; grid-template-columns:12px minmax(0,1fr) auto 42px; gap:12px; align-items:center; padding:12px 4px; border-bottom:1px solid var(--line); font-size:.95rem; cursor:pointer; transition:background .2s}
+.flow-legend button[aria-pressed="true"]{border-radius:10px; border-bottom-color:transparent}
+.flow-legend button:last-child{border-bottom:0}
+.flow-legend button[aria-pressed="true"]{background:var(--surface2)}
+.flow-legend button:focus-visible{outline:2px solid var(--lime); outline-offset:-2px}
+.flow-legend i{width:12px; height:12px; border-radius:4px}
+.flow-legend .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.flow-legend .num{font-size:.88rem}
+.flow-legend .pc{color:var(--muted); text-align:right; font-size:.8rem}
+@media (max-width:640px){ .flow-legend{display:block} .flow-card{padding:18px 16px} }
 .pains{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px}
 .pain{display:flex; gap:14px; align-items:center; padding:18px; border-radius:20px; background:var(--bg2); border:1px solid var(--line)}
 .pain .pi{width:46px; height:46px; border-radius:14px; display:grid; place-items:center; flex:none; color:var(--card-ink)}
@@ -1066,23 +1074,30 @@ footer{padding-block:64px 40px}
   document.getElementById("marq").innerHTML = mHTML + mHTML;
 
   // ---- money flow (sankey) ----
-  (function flow(){
+  const flowMQ = matchMedia("(max-width:640px)");
+  function flow(){
     const svg = document.getElementById("flow");
+    const mob = flowMQ.matches;
     const income = 620000;
     const hues = ["--violet","--butter","--sky","--coral","#E58BD8","--lime","--muted"];
     const outs = [...cats.map(c => [c[0], c[1]]), ["Savings", 120000], ["Unplanned", 81600]].map((o,i) => [o[0], o[1], hues[i]]);
     const col = h => h.startsWith("--") ? `var(${h})` : h;
-    const H = 300, top = 30, gap = 9, k = (H - gap*(outs.length-1)) / income;
-    const Lx = 24, Lw = 18, Rx = 500, Rw = 16;
-    let s = `<rect x="${Lx}" y="${top}" width="${Lw}" height="${income*k + gap*(outs.length-1)}" rx="6" fill="var(--ink)"/>`;
-    s += `<text x="${Lx}" y="${top-10}" class="lab" font-weight="600">Income</text><text x="${Lx+62}" y="${top-10}" class="amt lab">${naira(income)}</text>`;
-    let ly = top, ry = top, legend = "";
+    // left side packs tight, right side fans out so the split reads as motion
+    const W = mob ? 360 : 760, VH = mob ? 400 : 360;
+    const top = 34, lgap = 3, rgap = mob ? 14 : 10, H = VH - top - 10;
+    const k = (H - rgap*(outs.length-1)) / income;
+    const Lx = mob ? 2 : 24, Lw = mob ? 14 : 18, Rx = mob ? W - 14 : 500, Rw = mob ? 12 : 16;
+    const lTotal = income*k + lgap*(outs.length-1), lTop = top + (H - lTotal)/2;
+    svg.setAttribute("viewBox", `0 0 ${W} ${VH}`);
+    let s = `<rect x="${Lx}" y="${lTop}" width="${Lw}" height="${lTotal}" rx="6" fill="var(--ink)"/>`;
+    s += `<text x="${Lx}" y="18" font-weight="600">Income</text><text x="${Lx+62}" y="18" class="amt">${naira(income)}</text>`;
+    let ly = lTop, ry = top, legend = "";
     outs.forEach(([n,v,h],i) => {
       const hgt = v*k;
       const y0 = ly, y1 = ly + hgt, r0 = ry, r1 = ry + hgt, mx = (Lx+Lw+Rx)/2;
       const band = `M${Lx+Lw} ${y0} C${mx} ${y0} ${mx} ${r0} ${Rx} ${r0} L${Rx} ${r1} C${mx} ${r1} ${mx} ${y1} ${Lx+Lw} ${y1}Z`;
       const mid = `M${Lx+Lw} ${(y0+y1)/2} C${mx} ${(y0+y1)/2} ${mx} ${(r0+r1)/2} ${Rx} ${(r0+r1)/2}`;
-      s += `<g class="link"><path class="band" d="${band}" fill="${col(h)}"/>`;
+      s += `<g class="link" data-i="${i}"><path class="band" d="${band}" fill="${col(h)}"/>`;
       if (!RM){
         const nDots = Math.max(1, Math.round(v/40000));
         for (let j=0;j<nDots;j++){
@@ -1093,14 +1108,27 @@ footer{padding-block:64px 40px}
       }
       s += `<title>${n}: ${naira(v)}</title></g>`;
       s += `<rect x="${Rx}" y="${r0}" width="${Rw}" height="${Math.max(hgt,2)}" rx="4" fill="${col(h)}"/>`;
-      const cy = r0 + hgt/2 + 4;
-      s += `<text x="${Rx+Rw+12}" y="${cy}" class="lab">${n}</text><text x="${Rx+Rw+12+ (n.length*6.9) + 10}" y="${cy}" class="amt lab">${naira(v)}</text>`;
-      legend += `<div><i style="background:${col(h)}"></i>${n}<span class="num">${short(v)}</span></div>`;
-      ly += hgt + gap; ry += hgt + gap;
+      if (!mob){
+        const cy = r0 + hgt/2 + 4;
+        s += `<text x="${Rx+Rw+12}" y="${cy}">${n}</text><text x="${Rx+Rw+12+ (n.length*6.9) + 10}" y="${cy}" class="amt">${naira(v)}</text>`;
+      }
+      legend += `<button type="button" data-i="${i}"><i style="background:${col(h)}"></i><span class="nm">${n}</span><span class="num">${naira(v)}</span><span class="pc num">${Math.round(v/income*100)}%</span></button>`;
+      ly += hgt + lgap; ry += hgt + rgap;
     });
     svg.innerHTML = s;
     document.getElementById("flowLegend").innerHTML = legend;
-  })();
+  }
+  flow();
+  flowMQ.addEventListener("change", flow);
+  // tap a legend row to light up its stream
+  const fl = document.getElementById("flowLegend");
+  fl.addEventListener("click", e => {
+    const b = e.target.closest("[data-i]"); if (!b) return;
+    const on = b.getAttribute("aria-pressed") !== "true";
+    fl.querySelectorAll("[data-i]").forEach(x => x.setAttribute("aria-pressed", on && x === b));
+    document.querySelectorAll("#flow g.link").forEach(g => g.classList.toggle("dim", on && g.dataset.i !== b.dataset.i));
+    document.querySelectorAll("#flow g.link").forEach(g => g.classList.toggle("hi", on && g.dataset.i === b.dataset.i));
+  });
 
   // ---- insights bars ----
   document.getElementById("hbars").innerHTML = cats.map(([n,v,c],i) =>
